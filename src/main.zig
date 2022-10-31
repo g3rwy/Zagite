@@ -1,10 +1,11 @@
 const std = @import("std");
-const ui = @import("ui.zig");
 
 const rl = @cImport({
     @cInclude("raylib.h");
 });
-
+const ui = @cImport({
+   @cInclude("microui.h"); 
+});
 
 const V2 = struct {x: c_int, y: c_int};
 const HEIGHT = 1000;
@@ -23,6 +24,17 @@ var mouse_point : V2 = .{.x=0 , .y=0};
 var swap_vec : V2 = .{.x=0 , .y=0};
 var saved_cam_center = rl.Vector2 { .x = 0.0, .y = 0.0 };
 
+
+pub fn text_width(font: ui.mu_Font,text: [*c]const u8, len: c_int) callconv(.C) c_int {
+    _ = font;_ = len;
+    return rl.MeasureText(text,10); // HACK change fontSize to something else
+}
+
+pub fn text_height(font: ui.mu_Font) callconv(.C) c_int {
+    _ = font;
+    return 10;
+}
+
 pub fn main() anyerror!void {
     var circ_pos = rl.Vector2 { .x = 0.0, .y = 0.0 };
     rl.InitWindow(WIDTH, HEIGHT, "SANDBOX ZIGATE");
@@ -30,17 +42,24 @@ pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var alloc = gpa.allocator();
     defer _ = gpa.deinit();
+        
+    var ctx = try alloc.create(ui.mu_Context);
+    defer alloc.destroy(ctx);
+
+    ui.mu_init(ctx);
     
+    ctx.text_width =  &text_width;
+    ctx.text_height = &text_height;
     
-    rl.SetTargetFPS(120);
+    rl.SetTargetFPS(60);
     grid_offset = @intToFloat(f32,@divFloor(GridToScreen(1,0).x - GridToScreen(0,0).x,2));
 
-    var panel = ui.Panel{.bound = .{.x=0,.y=0,.w=300,.h=700},.color = rl.GRAY};
-    ui.changeTransparency(&panel.color,45.0);
 
     while (! rl.WindowShouldClose())
     {
-        
+        ui.mu_input_mousedown(ctx,rl.GetMouseX(),rl.GetMouseY(), @as(c_int,@boolToInt(rl.IsMouseButtonDown(0))) );
+        // TODO add update input to microui
+
         const move_val = @log10(grid_scale / 4);
         if (rl.IsKeyDown(rl.KEY_RIGHT)) camera_center.x += move_val;
         
@@ -66,7 +85,7 @@ pub fn main() anyerror!void {
             const circ_screen = GridToScreen(circ_pos.x, circ_pos.y); // FIXME again problems with adding in wrong segments
             rl.DrawCircle(circ_screen.x,circ_screen.y, 7,rl.RED);
 
-
+                
             if(rl.IsMouseButtonPressed(1)){ // Counts once and saves where we started moving mouse
                 mouse_point.x = rl.GetMouseX();
                 mouse_point.y = rl.GetMouseY();
@@ -90,7 +109,6 @@ pub fn main() anyerror!void {
             }
             
             DrawGrid();           
-            ui.draw(panel);
                
             const string = try std.fmt.allocPrint(
                 alloc,
@@ -100,6 +118,32 @@ pub fn main() anyerror!void {
 
             try DrawTxt(string,alloc,10,10,24,rl.WHITE);
             alloc.free(string);
+            
+            ui.mu_begin(ctx);
+            
+            //TODO do all the micrui shit
+            
+            if (ui.mu_begin_window(ctx, "My Window", ui.mu_rect(10, 10, 300, 400)) != 0) {
+                if(ui.mu_button(ctx,"Hello Button") != 0 ){
+                    std.debug.print("This works??\n",.{});
+                }
+              ui.mu_end_window(ctx);
+            }
+
+            ui.mu_end(ctx);
+            
+            //TODO draw microui with iterating through commands
+
+        var cmd : ?* ui.mu_Command = null;
+        while (ui.mu_next_command(ctx, &cmd) != 0) {
+          switch (cmd.?.type) {
+            ui.MU_COMMAND_TEXT => { rl.DrawText(&cmd.?.text.str, cmd.?.text.pos.x, cmd.?.text.pos.y, 10, muColortoColor(cmd.?.text.color)); },
+            ui.MU_COMMAND_RECT => { rl.DrawRectangle(cmd.?.rect.rect.x, cmd.?.rect.rect.y, cmd.?.rect.rect.w, cmd.?.rect.rect.h, muColortoColor(cmd.?.rect.color));},
+            ui.MU_COMMAND_ICON => { continue; }, // TODO how to draw icon?
+            ui.MU_COMMAND_CLIP => { continue; }, // TODO do i need it?
+            else => {continue; }
+          }
+        }        
         rl.EndDrawing();
     }
 
@@ -135,4 +179,8 @@ fn DrawGrid() void{
             rl.DrawPixel(posx, posy, rl.RAYWHITE);
         }
     }
+}
+
+fn muColortoColor(c: ui.mu_Color) rl.Color {
+    return rl.Color{.r = c.r, .g = c.g, .b = c.b, .a = c.a };
 }

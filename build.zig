@@ -12,7 +12,11 @@ pub fn build(b: *std.build.Builder) void {
 
     exe.linkLibC();
     exe.linkSystemLibrary("raylib");
+    exe.addCSourceFile("microui/src/microui.c",&.{"-fno-sanitize=undefined"});
+    // exe.linkSystemLibrary("raygui");
     
+    exe.defineCMacro("RAYGUI_IMPLEMENTATION",null);
+    // exe.defineCMacro("RAYGUI_STANDAOLE",null);
     exe.install();
     
     const run_cmd = exe.run();
