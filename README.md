@@ -8,3 +8,4 @@ was supposed to be **Zig**ate, since you know, Zig and gates, but well.
 
 ## Requirements
   - Zig 0.10.0-dev
+  - Raylib 4.2-dev
